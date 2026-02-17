@@ -1,37 +1,65 @@
 import BookPreview from "../../components/bookPreview";
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import styles from './style.module.css'
 
 export default function Search() {
   // stores search results
-  const [bookSearchResults, setBookSearchResults] = useState()
+  const [bookSearchResults, setBookSearchResults] = useState([])
   // stores value of input field
-  const [query, setQuery] = useState("")
+  const [query, setQuery] = useState("React")
   // compare to query to prevent repeat API calls
   const [previousQuery, setPreviousQuery] = useState()
   // used to prevent rage clicks on form submits
   const [fetching, setFetching] = useState(false)
 
-  // TODO: When the Search Page loads, use useEffect to fetch data from:
-  // https://www.googleapis.com/books/v1/volumes?langRestrict=en&maxResults=16&q=YOUR_QUERY
-  // Use a query of "React"
-
-  // TODO: Write a submit handler for the form that fetches data from:
-  // https://www.googleapis.com/books/v1/volumes?langRestrict=en&maxResults=16&q=YOUR_QUERY
-  // and stores the "items" property in the result to the bookSearchResults variable
-  // This function MUST prevent repeat searches if:
-  // fetch has not finished
-  // the query is unchanged
-
   const inputRef = useRef()
   const inputDivRef = useRef()
+
+  // ------ FETCH FUNCTION ------
+  async function fetchBooks(searchQuery) {
+    if (!searchQuery || fetching || searchQuery === previousQuery) return
+
+    setFetching(true) 
+    
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/books/v1/volumes?langRestrict=en&maxResults=16&q=${encodeURIComponent(searchQuery)}`
+      )
+
+      const data = await res.json()
+
+      setBookSearchResults(data.items || [])
+      setPreviousQuery(searchQuery)  
+
+    } catch (err) {
+      console.error("failed to fetch books", err)
+      setBookSearchResults([])
+      setPreviousQuery(searchQuery)
+    }
+
+    setFetching(false)
+  }
+
+  // ----- INITIAL LOAD -----
+  useEffect(() => {
+    fetchBooks("React")
+  }, [])
+
+  // ----- FORM SUBMIT -----
+  function handleSubmit(e) {
+    e.preventDefault()
+    fetchBooks(query.trim())
+  }
 
   return (
     <main className={styles.search}>
       <h1>Book Search</h1>
       {/* TODO: add an onSubmit handler */}
-      <form className={styles.form}>
-        <label htmlFor="book-search">Search by author, title, and/or keywords:</label>
+      <form className={styles.form} onSubmit={handleSubmit}>
+        <label htmlFor="book-search">
+          Search by author, title, and/or keywords:
+          </label>
+
         <div ref={inputDivRef}>
           {/* TODO: add value and onChange props to the input element based on query/setQuery */}
           <input
@@ -39,10 +67,14 @@ export default function Search() {
             type="text"
             name="book-search"
             id="book-search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
             />
+
           <button type="submit">Submit</button>
         </div>
       </form>
+
       {
         // if loading, show the loading component
         // else if there are search results, render those
@@ -50,12 +82,30 @@ export default function Search() {
         fetching
         ? <Loading />
         : bookSearchResults?.length
-        ? <div className={styles.bookList}>
+        ? (
+          <div className={styles.bookList}>
+            {bookSearchResults.map(book => {
+              const info = book.volumeInfo || {}
+
+              return (
+                <BookPreview
+                key={book.id}
+                title={info.title}
+                authors={info.authors}
+                thumbnail={info.imageLinks?.thumbnail}
+                previewLink={info.previewLink}
+              />
+            )
+          })}
             {/* TODO: render BookPreview components for each search result here based on bookSearchResults */}
           </div>
-        : <NoResults
+        )
+        : (
+        <NoResults
           {...{inputRef, inputDivRef, previousQuery}}
-          clearSearch={() => setQuery("")}/>
+          clearSearch={() => setQuery("")}
+          />
+        )
       }
     </main>
   )
